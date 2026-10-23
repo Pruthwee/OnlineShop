@@ -16,9 +16,9 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
+
+import software.amazon.awssdk.services.s3.S3Client;
 
 import static com.gmail.merikbest2015.ecommerce.util.TestConstants.*;
 import static org.hamcrest.Matchers.*;
@@ -354,7 +354,29 @@ public class AdminControllerTest {
     }
 
     private MockMultipartFile mockFile() throws IOException {
-        FileInputStream inputFile = new FileInputStream(new File(FILE_PATH));
-        return new MockMultipartFile("file", FILE_NAME, MediaType.MULTIPART_FORM_DATA_VALUE, inputFile);
+        try (java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream()) {
+            try (software.amazon.awssdk.core.ResponseInputStream<software.amazon.awssdk.services.s3.model.GetObjectResponse> s3InputStream =
+                         S3Client.create().getObject(
+                                 software.amazon.awssdk.services.s3.model.GetObjectRequest.builder()
+                                         .bucket(System.getenv("S3_BUCKET_NAME"))
+                                         .key("test/empty.jpg")
+                                         .build(),
+                                 software.amazon.awssdk.core.sync.ResponseTransformer.toInputStream())) {
+                byte[] data = new byte[4096];
+                int nRead;
+                while ((nRead = s3InputStream.read(data, 0, data.length)) != -1) {
+                    buffer.write(data, 0, nRead);
+                }
+                buffer.flush();
+                return new MockMultipartFile("file", FILE_NAME, MediaType.MULTIPART_FORM_DATA_VALUE,
+                        buffer.toByteArray());
+            } catch (software.amazon.awssdk.core.exception.SdkException e) {
+                // Fallback for local test environment without S3 access
+                buffer.write("test image content".getBytes());
+                buffer.flush();
+                return new MockMultipartFile("file", FILE_NAME, MediaType.MULTIPART_FORM_DATA_VALUE,
+                        buffer.toByteArray());
+            }
+        }
     }
 }

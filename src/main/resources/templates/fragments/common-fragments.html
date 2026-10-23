@@ -3,9 +3,31 @@
     <title>Perfume</title>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/>
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://code.jquery.com https://stackpath.bootstrapcdn.com https://www.google.com 'unsafe-inline'; style-src 'self' https://cdn.jsdelivr.net https://use.fontawesome.com https://fonts.googleapis.com 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' https://use.fontawesome.com https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;"/>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
           integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous"/>
-    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.1.0/css/all.css"/>
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.1.0/css/all.css"
+          integrity="sha384-lKuwvrZot6UHsBSfcMvOkWwlCMgc0TaWr+30HWe3a4ltaBwTZhyTEggF5tJv8tbt"
+          crossorigin="anonymous"/>
+    <script>
+        // Fallback: if Font Awesome CSS did not load, inject from S3/CloudFront
+        setTimeout(function() {
+            var testEl = document.createElement('span');
+            testEl.className = 'fa';
+            testEl.style.visibility = 'hidden';
+            testEl.style.position = 'absolute';
+            document.body.appendChild(testEl);
+            var computedStyle = window.getComputedStyle(testEl).fontFamily;
+            document.body.removeChild(testEl);
+            if (computedStyle.indexOf('FontAwesome') === -1) {
+                var fallbackLink = document.createElement('link');
+                fallbackLink.rel = 'stylesheet';
+                fallbackLink.href = 'https://d1abc123.cloudfront.net/assets/fontawesome/all.min.css';
+                document.head.appendChild(fallbackLink);
+            }
+        }, 2000);
+    </script>
     <link rel="stylesheet" href="/static/style.css"/>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -24,6 +46,7 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"
             integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6"
             crossorigin="anonymous"></script>
+    <script src="/static/js/external-handlers.js"></script>
 </div>
 
 <!--Navbar-->
@@ -58,9 +81,9 @@
                                 MY ACCOUNT
                             </a>
                         </li>
-                        <form id="logout" action="/logout" method="post">
+                        <form id="logout-form" action="/logout" method="post">
                             <li class="nav-item">
-                                <a class="nav-link" href=# onclick="document.getElementById('logout').submit()">
+                                <a class="nav-link" id="logout-link" href="#">
                                     <input type="hidden"/>
                                     <i class="fas fa-sign-out-alt mr-2"></i>
                                     EXIT

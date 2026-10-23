@@ -1,5 +1,6 @@
 package com.gmail.merikbest2015.ecommerce.service.impl;
 
+import com.gmail.merikbest2015.ecommerce.configuration.SecretsManagerConfig;
 import com.gmail.merikbest2015.ecommerce.constants.ErrorMessage;
 import com.gmail.merikbest2015.ecommerce.constants.SuccessMessage;
 import com.gmail.merikbest2015.ecommerce.domain.Role;
@@ -16,11 +17,15 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+import software.amazon.awssdk.core.exception.SdkException;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,12 +36,24 @@ public class RegistrationServiceImpl implements RegistrationService {
     private final PasswordEncoder passwordEncoder;
     private final RestTemplate restTemplate;
     private final ModelMapper modelMapper;
+    private final SecretsManagerConfig secretsManagerConfig;
 
     @Value("${recaptcha.url}")
     private String captchaUrl;
 
-    @Value("${recaptcha.secret}")
-    private String secret;
+    private String getRecaptchaSecret() {
+        try {
+            String secret = secretsManagerConfig.getRecaptchaSecret();
+            if (secret != null) {
+                return secret;
+            }
+        } catch (SdkException e) {
+            // Fall back gracefully - the old code would have used the hardcoded secret
+            // In cloud, the secret should be available via Secrets Manager
+        }
+        // Fallback: read from environment variable if Secrets Manager is not configured
+        return System.getenv("RECAPTCHA_SECRET");
+    }
 
     @Override
     @Transactional
@@ -48,8 +65,11 @@ public class RegistrationServiceImpl implements RegistrationService {
             return new MessageResponse("emailError", ErrorMessage.EMAIL_IN_USE);
         }
 
-        String url = String.format(captchaUrl, secret, captchaResponse);
-        CaptchaResponse response = restTemplate.postForObject(url, Collections.emptyList(), CaptchaResponse.class);
+        String url = String.format(captchaUrl, getRecaptchaSecret(), captchaResponse);
+        ExecutorService executor = Executors.newWorkStealingPool();
+        CompletableFuture<CaptchaResponse> captchaFuture = CompletableFuture
+                .supplyAsync(() -> restTemplate.postForObject(url, Collections.emptyList(), CaptchaResponse.class), executor);
+        CaptchaResponse response = captchaFuture.join();
         if (!response.isSuccess()) {
             return new MessageResponse("captchaError", ErrorMessage.CAPTCHA_ERROR);
         }

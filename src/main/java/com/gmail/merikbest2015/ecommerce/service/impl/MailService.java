@@ -12,7 +12,9 @@ import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -27,8 +29,29 @@ public class MailService {
     @Value("${hostname}")
     private String hostname;
 
+    private ExecutorService executor;
+
+    private synchronized ExecutorService getExecutor() {
+        if (executor == null) {
+            // Dynamic thread pool sizing based on available processors
+            int availableProcessors = Runtime.getRuntime().availableProcessors();
+            int corePoolSize = Math.max(2, availableProcessors);
+            int maxPoolSize = corePoolSize * 2;
+            int queueCapacity = corePoolSize * 10;
+
+            executor = new ThreadPoolExecutor(
+                    corePoolSize,
+                    maxPoolSize,
+                    60L, TimeUnit.SECONDS,
+                    new LinkedBlockingQueue<>(queueCapacity),
+                    new ThreadPoolExecutor.CallerRunsPolicy()
+            );
+        }
+        return executor;
+    }
+
     public void sendMessageHtml(String to, String subject, String template, Map<String, Object> attributes) {
-        ExecutorService executor = Executors.newFixedThreadPool(10);
+        ExecutorService executor = getExecutor();
         executor.execute(() -> {
             attributes.put("url", "http://" + hostname);
             Context thymeleafContext = new Context();
@@ -46,6 +69,5 @@ public class MailService {
                 throw new RuntimeException(e);
             }
         });
-        executor.shutdown();
     }
 }
