@@ -17,10 +17,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import javax.annotation.PreDestroy;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +36,8 @@ public class RegistrationServiceImpl implements RegistrationService {
     private final PasswordEncoder passwordEncoder;
     private final RestTemplate restTemplate;
     private final ModelMapper modelMapper;
+
+    private ExecutorService captchaExecutor;
 
     @Value("${recaptcha.url}")
     private String captchaUrl;
@@ -49,7 +56,15 @@ public class RegistrationServiceImpl implements RegistrationService {
         }
 
         String url = String.format(captchaUrl, secret, captchaResponse);
-        CaptchaResponse response = restTemplate.postForObject(url, Collections.emptyList(), CaptchaResponse.class);
+        CaptchaResponse response;
+        try {
+            response = verifyCaptchaAsync(url).join();
+        } catch (CompletionException e) {
+            if (e.getCause() instanceof RuntimeException) {
+                throw (RuntimeException) e.getCause();
+            }
+            throw e;
+        }
         if (!response.isSuccess()) {
             return new MessageResponse("captchaError", ErrorMessage.CAPTCHA_ERROR);
         }
@@ -78,5 +93,26 @@ public class RegistrationServiceImpl implements RegistrationService {
         user.setActive(true);
         userRepository.save(user);
         return new MessageResponse("alert-success", SuccessMessage.USER_ACTIVATED);
+    }
+
+    private CompletableFuture<CaptchaResponse> verifyCaptchaAsync(String url) {
+        return CompletableFuture
+                .supplyAsync(() -> restTemplate.postForObject(url, Collections.emptyList(), CaptchaResponse.class),
+                        getCaptchaExecutor());
+    }
+
+    private synchronized ExecutorService getCaptchaExecutor() {
+        if (captchaExecutor == null) {
+            captchaExecutor = Executors.newFixedThreadPool(Math.max(1, Runtime.getRuntime().availableProcessors()));
+        }
+        return captchaExecutor;
+    }
+
+    @PreDestroy
+    public synchronized void shutdownCaptchaExecutor() {
+        if (captchaExecutor != null) {
+            captchaExecutor.shutdown();
+            captchaExecutor = null;
+        }
     }
 }

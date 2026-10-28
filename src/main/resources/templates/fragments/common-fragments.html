@@ -1,5 +1,7 @@
 <!--Header-->
 <head th:fragment="head" xmlns:th="http://www.thymeleaf.org">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://code.jquery.com https://cdn.jsdelivr.net https://stackpath.bootstrapcdn.com https://www.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://stackpath.bootstrapcdn.com https://use.fontawesome.com https://fonts.googleapis.com; font-src 'self' https://use.fontawesome.com https://fonts.gstatic.com; img-src 'self' data: https:; frame-src https://www.google.com; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"/>
+    <th:block th:fragment="head-content">
     <title>Perfume</title>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/>
@@ -11,6 +13,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap" rel="stylesheet">
     <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    </th:block>
 </head>
 
 <!--Scripts-->
@@ -24,6 +27,7 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"
             integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6"
             crossorigin="anonymous"></script>
+    <script src="/static/js/event-handlers.js"></script>
 </div>
 
 <!--Navbar-->
@@ -60,7 +64,7 @@
                         </li>
                         <form id="logout" action="/logout" method="post">
                             <li class="nav-item">
-                                <a class="nav-link" href=# onclick="document.getElementById('logout').submit()">
+                                <a class="nav-link" id="logout-link" href=#>
                                     <input type="hidden"/>
                                     <i class="fas fa-sign-out-alt mr-2"></i>
                                     EXIT

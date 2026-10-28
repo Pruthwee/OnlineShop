@@ -25,16 +25,26 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.io.File;
+import software.amazon.awssdk.core.exception.SdkException;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+
+import javax.annotation.PreDestroy;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class AdminServiceImpl implements AdminService {
 
-    @Value("${upload.path}")
-    private String uploadPath;
+    private static final String UPLOAD_KEY_PREFIX = "uploads/";
+
+    @Value("${upload.s3.bucket:}")
+    private String uploadBucket;
+
+    private S3Client s3Client;
 
     private final UserRepository userRepository;
     private final PerfumeRepository perfumeRepository;
@@ -109,17 +119,44 @@ public class AdminServiceImpl implements AdminService {
     private MessageResponse savePerfume(PerfumeRequest perfumeRequest, MultipartFile file, String message) throws IOException {
         Perfume perfume = modelMapper.map(perfumeRequest, Perfume.class);
         if (file != null && !file.getOriginalFilename().isEmpty()) {
-            File uploadDir = new File(uploadPath);
-
-            if (!uploadDir.exists()) {
-                uploadDir.mkdir();
-            }
             String uuidFile = UUID.randomUUID().toString();
             String resultFilename = uuidFile + "." + file.getOriginalFilename();
-            file.transferTo(new File(uploadPath + "/" + resultFilename));
+            uploadToS3(file, resultFilename);
             perfume.setFilename(resultFilename);
         }
         perfumeRepository.save(perfume);
         return new MessageResponse("alert-success", message);
+    }
+
+    private void uploadToS3(MultipartFile file, String filename) throws IOException {
+        if (uploadBucket == null || uploadBucket.isEmpty()) {
+            throw new IOException("APP_S3_BUCKET is not set");
+        }
+        PutObjectRequest.Builder putRequest = PutObjectRequest.builder()
+                .bucket(uploadBucket)
+                .key(UPLOAD_KEY_PREFIX + filename);
+        if (file.getContentType() != null) {
+            putRequest.contentType(file.getContentType());
+        }
+        try (InputStream inputStream = file.getInputStream()) {
+            getS3Client().putObject(putRequest.build(), RequestBody.fromInputStream(inputStream, file.getSize()));
+        } catch (SdkException e) {
+            throw new IOException("Failed to upload " + filename + " to S3", e);
+        }
+    }
+
+    private synchronized S3Client getS3Client() {
+        if (s3Client == null) {
+            s3Client = S3Client.create();
+        }
+        return s3Client;
+    }
+
+    @PreDestroy
+    public synchronized void closeS3Client() {
+        if (s3Client != null) {
+            s3Client.close();
+            s3Client = null;
+        }
     }
 }

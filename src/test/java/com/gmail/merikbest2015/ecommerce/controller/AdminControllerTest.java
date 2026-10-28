@@ -16,9 +16,8 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 
 import static com.gmail.merikbest2015.ecommerce.util.TestConstants.*;
 import static org.hamcrest.Matchers.*;
@@ -35,6 +34,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Sql(value = {"/sql/create-orders-after.sql", "/sql/create-user-after.sql", "/sql/create-perfumes-after.sql"},
         executionPhase = Sql.ExecutionPhase.AFTER_TEST_METHOD)
 public class AdminControllerTest {
+
+    private static final String FILE_RESOURCE = "/empty.jpg";
 
     @Autowired
     private MockMvc mockMvc;
@@ -354,7 +355,8 @@ public class AdminControllerTest {
     }
 
     private MockMultipartFile mockFile() throws IOException {
-        FileInputStream inputFile = new FileInputStream(new File(FILE_PATH));
-        return new MockMultipartFile("file", FILE_NAME, MediaType.MULTIPART_FORM_DATA_VALUE, inputFile);
+        try (InputStream inputFile = AdminControllerTest.class.getResourceAsStream(FILE_RESOURCE)) {
+            return new MockMultipartFile("file", FILE_NAME, MediaType.MULTIPART_FORM_DATA_VALUE, inputFile);
+        }
     }
 }

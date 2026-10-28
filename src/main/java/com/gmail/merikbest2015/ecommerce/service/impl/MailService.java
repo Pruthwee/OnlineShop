@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring5.SpringTemplateEngine;
 
+import javax.annotation.PreDestroy;
 import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
 import java.util.Map;
@@ -18,8 +19,12 @@ import java.util.concurrent.Executors;
 @RequiredArgsConstructor
 public class MailService {
 
+    private static final int MAIL_THREADS_PER_PROCESSOR = 2;
+
     private final JavaMailSender mailSender;
     private final SpringTemplateEngine thymeleafTemplateEngine;
+
+    private ExecutorService executor;
 
     @Value("${spring.mail.username}")
     private String username;
@@ -28,8 +33,7 @@ public class MailService {
     private String hostname;
 
     public void sendMessageHtml(String to, String subject, String template, Map<String, Object> attributes) {
-        ExecutorService executor = Executors.newFixedThreadPool(10);
-        executor.execute(() -> {
+        getExecutor().execute(() -> {
             attributes.put("url", "http://" + hostname);
             Context thymeleafContext = new Context();
             thymeleafContext.setVariables(attributes);
@@ -46,6 +50,22 @@ public class MailService {
                 throw new RuntimeException(e);
             }
         });
-        executor.shutdown();
+    }
+
+    private synchronized ExecutorService getExecutor() {
+        if (executor == null) {
+            // Pool size follows the CPUs the JVM sees (it honours the container's CPU limit); the OS schedules the threads
+            int poolSize = Math.max(1, Runtime.getRuntime().availableProcessors()) * MAIL_THREADS_PER_PROCESSOR;
+            executor = Executors.newFixedThreadPool(poolSize);
+        }
+        return executor;
+    }
+
+    @PreDestroy
+    public synchronized void shutdownExecutor() {
+        if (executor != null) {
+            executor.shutdown();
+            executor = null;
+        }
     }
 }
