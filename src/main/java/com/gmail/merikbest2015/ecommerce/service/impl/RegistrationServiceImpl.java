@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -49,7 +50,9 @@ public class RegistrationServiceImpl implements RegistrationService {
         }
 
         String url = String.format(captchaUrl, secret, captchaResponse);
-        CaptchaResponse response = restTemplate.postForObject(url, Collections.emptyList(), CaptchaResponse.class);
+        CaptchaResponse response = CompletableFuture.supplyAsync(() ->
+                restTemplate.postForObject(url, Collections.emptyList(), CaptchaResponse.class)
+        ).join();
         if (!response.isSuccess()) {
             return new MessageResponse("captchaError", ErrorMessage.CAPTCHA_ERROR);
         }

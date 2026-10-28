@@ -24,8 +24,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+import software.amazon.awssdk.core.exception.SdkException;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.UUID;
 
@@ -40,6 +43,8 @@ public class AdminServiceImpl implements AdminService {
     private final PerfumeRepository perfumeRepository;
     private final OrderRepository orderRepository;
     private final ModelMapper modelMapper;
+    private S3Client s3Client;
+    private String bucketName;
 
     @Override
     public Page<Perfume> getPerfumes(Pageable pageable) {
@@ -109,15 +114,22 @@ public class AdminServiceImpl implements AdminService {
     private MessageResponse savePerfume(PerfumeRequest perfumeRequest, MultipartFile file, String message) throws IOException {
         Perfume perfume = modelMapper.map(perfumeRequest, Perfume.class);
         if (file != null && !file.getOriginalFilename().isEmpty()) {
-            File uploadDir = new File(uploadPath);
-
-            if (!uploadDir.exists()) {
-                uploadDir.mkdir();
-            }
             String uuidFile = UUID.randomUUID().toString();
             String resultFilename = uuidFile + "." + file.getOriginalFilename();
-            file.transferTo(new File(uploadPath + "/" + resultFilename));
-            perfume.setFilename(resultFilename);
+            try {
+                if (s3Client == null) {
+                    s3Client = S3Client.create();
+                    bucketName = uploadPath;
+                }
+                PutObjectRequest putRequest = PutObjectRequest.builder()
+                        .bucket(bucketName)
+                        .key("uploads/" + resultFilename)
+                        .build();
+                s3Client.putObject(putRequest, RequestBody.fromBytes(file.getBytes()));
+                perfume.setFilename(resultFilename);
+            } catch (SdkException e) {
+                throw new IOException("Failed to upload file to S3", e);
+            }
         }
         perfumeRepository.save(perfume);
         return new MessageResponse("alert-success", message);

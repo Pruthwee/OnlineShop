@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring5.SpringTemplateEngine;
 
+import javax.annotation.PreDestroy;
 import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
 import java.util.Map;
@@ -27,9 +28,11 @@ public class MailService {
     @Value("${hostname}")
     private String hostname;
 
+    private final ExecutorService mailExecutor = Executors.newFixedThreadPool(
+            Math.max(1, Runtime.getRuntime().availableProcessors()));
+
     public void sendMessageHtml(String to, String subject, String template, Map<String, Object> attributes) {
-        ExecutorService executor = Executors.newFixedThreadPool(10);
-        executor.execute(() -> {
+        mailExecutor.execute(() -> {
             attributes.put("url", "http://" + hostname);
             Context thymeleafContext = new Context();
             thymeleafContext.setVariables(attributes);
@@ -46,6 +49,12 @@ public class MailService {
                 throw new RuntimeException(e);
             }
         });
-        executor.shutdown();
+    }
+
+    @PreDestroy
+    public void cleanup() {
+        if (mailExecutor != null) {
+            mailExecutor.shutdown();
+        }
     }
 }
